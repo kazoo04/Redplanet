@@ -18,7 +18,6 @@ import std.uri		: encodeComponent;
 
 import deimos.openssl.ssl;
 
-
 immutable consumer_key = "gi9QcwbtYnsEKQf2HWBGg";
 immutable consumer_secret = "iztMAGvqAVKejVLRHwtxvQD251Z06C3MoWXjtDC6A";
 
@@ -60,11 +59,33 @@ string[char[]] loadKeys()
 }
 */
 
+void showSplash()
+{
+  writeln(`
+     _____
+    |  _  \         _                             _
+    | |_)  |___  __| |____  _ __  ___ _____  ___ | |_
+    |  _ _/  _ \/ _  |  _ \| '__/ _  |  _  \/ _ \| __|
+    | | \ \  __/ (_| | |_) | | / (_| | | | |  __/| |_
+    |_|  \_\___|\____|  __/|_| \_____|_| |_|\___| \__|
+                     |_|
+
+  `);
+}
+
+void getAccessToken()
+{
+
+
+}
+
 void main(string args[])
 {
   //auto keys = loadKeys();
+  
 
-  auto join_query = (string[string] p) =>
+  showSplash();
+   auto join_query = (string[string] p) =>
     p.keys.sort.map!(k => k ~ "=" ~ p[k]).join("&");
 
   auto split_query = (string query) {
@@ -117,14 +138,7 @@ void main(string args[])
     writeln("\thttp = ", http);
 
     auto result = cast(immutable)post(uri, str, http);
-    /*
-    try {
-      auto result = cast(immutable)post(uri, str, http);
-    }
-    catch(CurlException) {
-      writeln("CurlException:");
-    }
-    */
+
     writeln("\tresult = ", result);
 
     return result;
@@ -134,7 +148,6 @@ void main(string args[])
   writeln("get request token");
   auto request_token = (() =>
       split_query(oauth_post(Api.request_token, null))) ();
-
 
   writeln("oauth verify");
   auto oauth_verifier = () {
@@ -151,76 +164,43 @@ void main(string args[])
           request_token["oauth_token_secret"]))) ();
 
 
-  auto streaming = () {
-    auto param = [
-      "oauth_consumer_key"      : consumer_key,
-      "oauth_nonce"             : Clock.currTime.toUnixTime.to!string,
-      "oauth_signature_method"  : "HMAC-SHA1",
-      "oauth_timestamp"         : Clock.currTime.toUnixTime.to!string,
-      "oauth_version"           : "1.0",
-      "oauth_token"             : access_token["oauth_token"]];
+  auto param = [
+    "oauth_consumer_key"      : consumer_key,
+    "oauth_nonce"             : Clock.currTime.toUnixTime.to!string,
+    "oauth_signature_method"  : "HMAC-SHA1",
+    "oauth_timestamp"         : Clock.currTime.toUnixTime.to!string,
+    "oauth_version"           : "1.0",
+    "oauth_token"             : access_token["oauth_token"]];
 
-    auto signature = oauth_signature("GET", Stream.user,
-        join_query(param), consumer_secret, access_token["oauth_token_secret"]);
-    param["oauth_signature"] = signature;
-    param["replies"] = "all";
+  auto signature = oauth_signature("GET", Stream.user,
+      join_query(param), consumer_secret, access_token["oauth_token_secret"]);
+  param["oauth_signature"] = signature;
+  param["replies"] = "all";
 
-    auto created_at = (JSONValue v) {
-      auto d = v.object["created_at"].str.split;
-      const t = SysTime(DateTime.fromSimpleString(
-        d[5] ~ "-" ~ d[1] ~ "-" ~ d[2] ~ " " ~ d[3])) + dur!"hours"(9);
+  auto created_at = (JSONValue v) {
+    auto d = v.object["created_at"].str.split;
+    const t = SysTime(DateTime.fromSimpleString(
+      d[5] ~ "-" ~ d[1] ~ "-" ~ d[2] ~ " " ~ d[3])) + dur!"hours"(9);
 
-      return [t.hour, t.minute, t.second].map!(x => x.to!string.rightJustify(2, '0')).join(":");
-    };
-
-    auto screen_name = (JSONValue v) => v.object["user"].object["screen_name"].str;
-    auto text = (JSONValue v) => v.object["text"].str;
-
-    auto http = HTTP(Stream.user);
-    http.addRequestHeader("Authorization", oauth_header(param));
-    http.addRequestHeader("User-Agent", "the unspeakable one");
-    http.dataTimeout = dur!"seconds"(-1);
-    http.onReceive = (ubyte[] data) {
-      auto j = (cast(string)data == "\r\n") ? JSONValue() : (cast(string)data).parseJSON;
-      if("text" in j.object)
-        format("%-15s: %s at %s", screen_name(j), text(j), created_at(j)).writeln;
-      return data.length;
-    };
-
-    http.perform;
-
-    return true;
-
-  }();
-}
-
-/++
-immutable consumer_key = ""
-
-void main(string args[])
-{
-  // Pass the Twitter ID to the first argument
-  assert(args[1], "invalid argument");
-
-  immutable uri = "http://twitter.com/statuses/user_timeline/" ~ args[1] ~ ".json";
-
-  auto created_at = (string date) {
-    const d = date.split();
-
-    const time = SysTime(DateTime.fromSimpleString(d[5] ~ "-" ~ d[1] ~ "-" ~ d[2] ~ " " ~ d[3]));
-
-    const duration = time - Clock.currTime() + dur!"hours"(9);
-
-    return
-      (duration.weeks < 0)    ? text(time.month, "/", time.day) :
-      (duration.days < 0)     ? text(-duration.days, "日前") :
-      (duration.hours < 0)    ? text(-duration.hours, "時間前") :
-      (duration.minutes < 0)  ? text(-duration.minutes, "分前") :
-      text(-duration.seconds, "秒前");
+    return [t.hour, t.minute, t.second].map!(x => x.to!string.rightJustify(2, '0')).join(":");
   };
 
-  foreach(o; get(uri).parseJSON().array) {
-    writeln(o.object["text"].str, " ", created_at(o.object["created_at"].str));
-  }
+  auto screen_name = (JSONValue v) => v.object["user"].object["screen_name"].str;
+  auto text = (JSONValue v) => v.object["text"].str;
+
+  auto http = HTTP(Stream.user);
+  http.addRequestHeader("Authorization", oauth_header(param));
+  http.addRequestHeader("User-Agent", "the unspeakable one");
+  http.dataTimeout = dur!"seconds"(-1);
+  http.onReceive = (ubyte[] data) {
+    auto j = (cast(string)data == "\r\n") ? JSONValue() : (cast(string)data).parseJSON;
+    if("text" in j.object)
+      format("%-15s: %s at %s", screen_name(j), text(j), created_at(j)).writeln;
+    return data.length;
+  };
+
+  http.perform;
+
+
 }
-+/
+
